@@ -1,5 +1,6 @@
 import argparse
 import os
+import sys
 
 from . import data
 
@@ -22,6 +23,11 @@ def parse_args():
     hash_object_parser.add_argument('data', type=str, help='Data to hash')
     hash_object_parser.set_defaults(func=hash_object)
 
+    # Add subcommand for 'cat-file'
+    cat_file_parser = commands.add_parser('cat-file', help='Display the contents of a file in the repository')
+    cat_file_parser.add_argument('oid', type=str, help='Object ID to display')
+    cat_file_parser.set_defaults(func=cat_file)
+
     return parser.parse_args()
 
 def init(args):
@@ -34,3 +40,10 @@ def hash_object(args):
         file_content= f.read()
     oid = data.hash_object(file_content)
     print(f"Hashed object ID: {oid}")
+
+def cat_file(args):
+    # print(f"Displaying contents of object ID: {args.oid}")
+    sys.stdout.flush()
+    object_content = data.get_object(args.oid, expected=None)
+    if object_content is not None:
+        sys.stdout.buffer.write(object_content)

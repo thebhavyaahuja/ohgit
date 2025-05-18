@@ -24,19 +24,39 @@ def init():
         return
 
 
-def hash_object(data):
+def hash_object(data, type_="blob"):
     """
     Hash the given data and store it in the .ohgit/objects directory.
     """
     print(f"Hashing data: \n{data}")
     print()
     # Create a unique hash for the data
-    sha1 = hashlib.sha1()
-    sha1.update(data)
+    object= type_.encode() + b"\0" + data
+    sha1 = hashlib.sha1(object)
     oid = sha1.hexdigest()
+    print(f"Object ID: {oid}")
 
     # Store the object in the .ohgit/objects directory
     with open(f"{GIT_DIR}/objects/{oid}", "wb") as f:
-        f.write(data)
+        f.write(object)
 
     return oid
+
+def get_object(oid, expected="blob"):
+    """
+    Retrieve the object with the given OID from the .ohgit/objects directory.
+    """
+    # Check if the object exists
+    if not os.path.exists(f"{GIT_DIR}/objects/{oid}"):
+        print(f"Error: Object {oid} not found in {GIT_DIR}/objects")
+        return None
+
+    # Read and return the object data
+    with open(f"{GIT_DIR}/objects/{oid}", "rb") as f:
+        obj = f.read()
+    type_, content = obj.split(b"\0", 1)
+    type_ = type_.decode()
+    if expected is not None:
+        print(f"Error: Expected object type {expected}, but got {type_}")
+        return None
+    return content
