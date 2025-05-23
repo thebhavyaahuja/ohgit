@@ -1,8 +1,9 @@
 import argparse
 import os
 import sys
-
+import textwrap
 from . import data
+from . import base
 
 def main():
     args = parse_args()
@@ -28,6 +29,24 @@ def parse_args():
     cat_file_parser.add_argument('oid', type=str, help='Object ID to display')
     cat_file_parser.set_defaults(func=cat_file)
 
+    # Add subcommand for 'write-tree'
+    write_tree_parser = commands.add_parser('write-tree', help='Write the current state of the working directory to the repository')
+    write_tree_parser.set_defaults(func=write_tree)
+
+    # Add subcommand for 'read-tree'
+    read_tree_parser = commands.add_parser('read-tree', help='Read a tree object and write its contents to the working directory')
+    read_tree_parser.set_defaults(func=read_tree)
+    read_tree_parser.add_argument('tree', type=str, help='Object ID of the tree to read')
+
+    # Add subcommand for 'commit'
+    commit_parser = commands.add_parser ('commit')
+    commit_parser.set_defaults (func=commit)
+    commit_parser.add_argument ('-m', '--message', required=True)
+
+    log_parser = commands.add_parser ('log')
+    log_parser.set_defaults (func=log)
+    log_parser.add_argument ('oid', nargs='?')
+
     return parser.parse_args()
 
 def init(args):
@@ -47,3 +66,29 @@ def cat_file(args):
     object_content = data.get_object(args.oid, expected=None)
     if object_content is not None:
         sys.stdout.buffer.write(object_content)
+
+def write_tree(args):
+    # print("Writing the current state of the working directory to the repository...")
+    print(base.write_tree())
+    print("Written the current state of the working directory to the repository.")
+
+def read_tree(args):
+    # print(f"Reading tree object ID: {args.tree}")
+    base.read_tree(args.tree)
+    print(f"Read tree object ID: {args.tree} and wrote its contents to the working directory.")
+
+def commit(args):
+    # print(f"Committing changes with message: {args.message}")
+    base.commit(args.message)
+    print(f"Committed changes with message: {args.message}")
+
+def log(args):
+    oid = args.oid or data.get_HEAD ()
+    while oid:
+        commit = base.get_commit (oid)
+
+        print (f'commit {oid}\n')
+        print (textwrap.indent (commit.message, '    '))
+        print ('')
+
+        oid = commit.parent

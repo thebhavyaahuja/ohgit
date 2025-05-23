@@ -54,9 +54,23 @@ def get_object(oid, expected="blob"):
     # Read and return the object data
     with open(f"{GIT_DIR}/objects/{oid}", "rb") as f:
         obj = f.read()
-    type_, content = obj.split(b"\0", 1)
-    type_ = type_.decode()
+    type_from_file_bytes, content = obj.split(b"\0", 1)
+    type_from_file_str = type_from_file_bytes.decode()
+
+
     if expected is not None:
-        print(f"Error: Expected object type {expected}, but got {type_}")
-        return None
+        if type_from_file_str != expected:  # Ensure this is '!=' for a mismatch
+            print(f"Error: Expected object type {expected}, but got {type_from_file_str}")
+            return None
     return content
+
+
+def set_HEAD (oid):
+    with open (f'{GIT_DIR}/HEAD', 'w') as f:
+        f.write (oid)
+    print(f"Set HEAD to {oid}")
+
+def get_HEAD ():
+    if os.path.isfile (f'{GIT_DIR}/HEAD'):
+        with open (f'{GIT_DIR}/HEAD') as f:
+            return f.read ().strip ()
