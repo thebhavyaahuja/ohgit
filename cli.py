@@ -117,5 +117,3 @@ def k (args):
     for refname, ref in data.iter_refs():
         print (refname, ref)
     # TODO visualize refs
-
-i love it
