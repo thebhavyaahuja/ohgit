@@ -3,6 +3,7 @@ import os
 import itertools
 import operator
 from collections import namedtuple
+import string   
 
 def write_tree(directory='.'):
     # Get the real basename of the directory we are about to scan.
@@ -130,3 +131,23 @@ def checkout(oid):
 
 def create_tag (name, oid):
     data.update_ref (f'refs/tags/{name}', oid)
+
+def get_oid (name):
+    if name == '@': name = 'HEAD'
+    
+    refs_to_try = [
+        f'{name}',
+        f'refs/{name}',
+        f'refs/tags/{name}',
+        f'refs/heads/{name}',
+    ]
+    for ref in refs_to_try:
+        if data.get_ref (ref):
+            return data.get_ref (ref)
+
+    # Name is SHA1
+    is_hex = all (c in string.hexdigits for c in name)
+    if len (name) == 40 and is_hex:
+        return name
+
+    assert False, f'Unknown name {name}'
