@@ -4,6 +4,7 @@ import sys
 import textwrap
 from . import data
 from . import base
+import subprocess
 
 def main():
     args = parse_args()
@@ -51,7 +52,7 @@ def parse_args():
 
     checkout_parser = commands.add_parser ('checkout')
     checkout_parser.set_defaults (func=checkout)
-    checkout_parser.add_argument ('oid', type=oid)
+    checkout_parser.add_argument ('commit')
 
     tag_parser = commands.add_parser ('tag')
     tag_parser.set_defaults (func=tag)
@@ -61,11 +62,19 @@ def parse_args():
     k_parser = commands.add_parser('k')
     k_parser.set_defaults (func=k)
 
+    branch_parser = commands.add_parser ('branch')
+    branch_parser.set_defaults (func=branch)
+    branch_parser.add_argument ('name',nargs='?')
+    branch_parser.add_argument ('start_point', default='@', type=oid, nargs='?')
+
+    status_parser = commands.add_parser ('status')
+    status_parser.set_defaults (func=status)
+
     return parser.parse_args()
 
 def init(args):
     # print("Initializing a new OhGit repository...")
-    data.init()
+    base.init()
 
 def hash_object(args):
     # print(f"Hashing data: {args.data}")
@@ -97,23 +106,79 @@ def commit(args):
     print(f"Committed changes with message: {args.message}")
 
 def log(args):
-    oid = args.oid
-    while oid:
+    refs = {}
+    for refname, ref in data.iter_refs ():
+        refs.setdefault (ref.value, []).append (refname)
+    GREEN = '\033[92m'
+    RED = '\033[91m'
+    RESET = '\033[0m'
+    for oid in base.iter_commits_and_parents ({args.oid}):
         commit = base.get_commit (oid)
-
-        print (f'commit {oid}\n')
-        print (textwrap.indent (commit.message, '    '))
+        refs_str = f' ({", ".join (refs[oid])})' if oid in refs else ''
+        print (f'commit {RED}{oid}{RESET}{refs_str}\n')
+        print (textwrap.indent (f'{GREEN}{commit.message}{RESET}', '    '))
         print ('')
 
         oid = commit.parent
 
 def checkout(args):
-    base.checkout(args.oid)
+    base.checkout(args.commit)
 
 def tag (args):
     base.create_tag (args.name, args.oid)
 
 def k (args):
-    for refname, ref in data.iter_refs():
-        print (refname, ref)
-    # TODO visualize refs
+    dot = 'digraph commits {\n'
+
+    oids = set ()
+    for refname, ref in data.iter_refs (deref=False):
+        dot += f'"{refname}" [shape=note]\n'
+        dot += f'"{refname}" -> "{ref.value}"\n'
+        if not ref.symbolic:
+            oids.add (ref.value)
+
+    for oid in base.iter_commits_and_parents (oids):
+        commit = base.get_commit (oid)
+        dot += f'"{oid}" [shape=box style=filled label="{oid[:10]}"]\n'
+        if commit.parent:
+            dot += f'"{oid}" -> "{commit.parent}"\n'
+
+    dot += '}'
+    print (dot)
+
+    # with subprocess.Popen (
+    #         ['dot', '-Txdot', '/dev/stdin'],
+    #         stdin=subprocess.PIPE) as proc:
+    #     proc.communicate (dot.encode ())
+    
+    with subprocess.Popen (
+            ['dot', '-Tpng', '-o', 'commits.png', '/dev/stdin'],
+            stdin=subprocess.PIPE) as proc:
+        proc.communicate (dot.encode ())
+
+def branch(args):
+    GREEN = '\033[91m'
+    RESET = '\033[0m'
+
+    if not args.name:
+        current = base.get_branch_name()
+        for branch in base.iter_branch_names():
+            if branch == current:
+                # Star + current branch name in green
+                print(f'* {GREEN}{branch}{RESET} current')
+            else:
+                print(f'  {branch}')
+    else:
+        base.create_branch(args.name, args.start_point)
+        print(f"Created branch '{args.name}' starting from '{args.start_point}'")
+
+
+def status(args):
+    GREEN = '\033[91m'
+    RESET = '\033[0m'
+    HEAD = base.get_oid('@')
+    branch = base.get_branch_name()
+    if branch:
+        print(f"On branch {GREEN}{branch}{RESET}")
+    else:
+        print(f'HEAD detached at {HEAD[:10]}')

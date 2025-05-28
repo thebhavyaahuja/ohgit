@@ -2,8 +2,13 @@ from . import data
 import os
 import itertools
 import operator
-from collections import namedtuple
+from collections import namedtuple, deque
 import string   
+
+def init ():
+    data.init ()
+    data.update_ref ('HEAD', data.RefValue (symbolic=True, value='refs/heads/master'))
+
 
 def write_tree(directory='.'):
     # Get the real basename of the directory we are about to scan.
@@ -90,7 +95,7 @@ def read_tree (tree_oid):
 def commit (message):
     commit = f'tree {write_tree()}\n'
 
-    HEAD = data.get_ref ('HEAD')
+    HEAD = data.get_ref ('HEAD').value
     if HEAD:
         commit += f'parent {HEAD}\n'
     commit += '\n'
@@ -98,7 +103,7 @@ def commit (message):
 
     oid = data.hash_object (commit.encode (), 'commit')
 
-    data.update_ref ('HEAD', oid)
+    data.update_ref ('HEAD', data.RefValue (symbolic=False, value=oid))
     return oid
 
 def is_ignored(name):
@@ -124,30 +129,72 @@ def get_commit(oid):
     message = '\n'.join (lines)
     return Commit (tree=tree, parent=parent, message=message)
 
-def checkout(oid):
-    commit = get_commit(oid)
+def checkout (name):
+    oid = get_oid (name)
+    commit = get_commit (oid)
     read_tree (commit.tree)
-    data.update_ref ('HEAD', oid)
+
+    if is_branch (name):
+        HEAD = data.RefValue (symbolic=True, value=f'refs/heads/{name}')
+    else:
+        HEAD = data.RefValue (symbolic=False, value=oid)
+
+    data.update_ref ('HEAD', HEAD, deref=False)
+
+def is_branch (branch):
+    return data.get_ref (f'refs/heads/{branch}').value is not None
 
 def create_tag (name, oid):
-    data.update_ref (f'refs/tags/{name}', oid)
+    data.update_ref (f'refs/tags/{name}', data.RefValue (symbolic=False, value=oid))
 
 def get_oid (name):
     if name == '@': name = 'HEAD'
-    
+
+    # Try to get refs
     refs_to_try = [
         f'{name}',
         f'refs/{name}',
         f'refs/tags/{name}',
         f'refs/heads/{name}',
     ]
-    for ref in refs_to_try:
-        if data.get_ref (ref):
-            return data.get_ref (ref)
+    for ref_path in refs_to_try:
+        # data.get_ref(ref_path) by default dereferences fully and returns a RefValue
+        # whose .value attribute should be the final OID string.
+        ref_value_obj = data.get_ref(ref_path) 
+        if ref_value_obj and ref_value_obj.value:
+            # Ensure you return the .value which is the OID string
+            return ref_value_obj.value 
 
-    # Name is SHA1
+    # Name is not a ref, presume it's an OID
     is_hex = all (c in string.hexdigits for c in name)
     if len (name) == 40 and is_hex:
         return name
 
     assert False, f'Unknown name {name}'
+
+def iter_commits_and_parents (oids):
+    oids = deque(oids)
+    visited = set()
+
+    while oids:
+        oid = oids.popleft()
+        if not oid or oid in visited:
+            continue
+        visited.add (oid)
+        yield oid
+
+        commit = get_commit (oid)
+        oids.appendleft (commit.parent)
+
+def create_branch (name, oid):
+    data.update_ref (f'refs/heads/{name}', data.RefValue (symbolic=False, value=oid))
+
+def get_branch_name():
+    ref = data.get_ref('HEAD', deref=False)
+    if ref.symbolic:
+        return ref.value.split('/')[-1]  # Get the last part of the symbolic reference
+    return None  # Not a branch, just an OID
+
+def iter_branch_names ():
+    for refname, _ in data.iter_refs ('refs/heads/'):
+        yield os.path.relpath (refname, 'refs/heads/')
