@@ -68,3 +68,22 @@ ohgit log [commit_object_id]
     - **Description:** Visualizes the commit history, including branches and tags, as a graph. This command requires Graphviz to be installed.
     - **Implementation:** It gathers all references (like `HEAD` and all tags from `.ohgit/refs/tags/`) and their corresponding commit OIDs. It then traverses the commit history starting from these OIDs, collecting commit OIDs and their parent OIDs. A DOT language string is generated to describe this graph structure, which is then passed to the `dot` command-line tool (from Graphviz) via a subprocess to render and display the graph (e.g., using `xdot` for an interactive view or outputting to an image file).
 
+
+### 11. `ohgit branch [branch_name] [start_point_oid]`
+    - **Usage:**
+        - `ohgit branch`: Lists all local branches, highlighting the current one.
+        - `ohgit branch <branch_name> [start_point_oid]`: Creates a new branch named `<branch_name>` pointing to `start_point_oid`. If `start_point_oid` is omitted, it defaults to the current `HEAD`.
+    - **Description:** Manages branches. Branches are movable pointers to commits, allowing for divergent lines of development.
+    - **Implementation:**
+        - Listing: Iterates through files in `.ohgit/refs/heads/` and prints their names. It determines the current branch by checking if `HEAD` is a symbolic ref to a branch.
+        - Creation: Creates a new file at `.ohgit/refs/heads/<branch_name>` containing the OID of the `start_point_oid`.
+
+### 12. `ohgit status`
+    - **Usage:** `ohgit status`
+    - **Description:** Displays the current branch or indicates if `HEAD` is detached. (Note: This is a simplified status and does not show uncommitted changes like Git).
+    - **Implementation:** It retrieves the current branch name by checking if `HEAD` is a symbolic ref pointing to a branch in `refs/heads/`. If so, it prints the branch name. Otherwise, it prints the OID that `HEAD` is directly pointing to, indicating a detached `HEAD` state.
+
+### 13. `ohgit reset <commit_oid>`
+    - **Usage:** `ohgit reset <commit_oid>`
+    - **Description:** Resets the current branch `HEAD` (if on a branch) or `HEAD` itself (if detached) to point to the specified `commit_oid`. This command only changes the `HEAD` pointer; it does not modify the working directory or staging area.
+    - **Implementation:** It resolves the `<commit_oid>` to a full OID. It then updates the ref that `HEAD` points to (if `HEAD` is symbolic, e.g., `ref: refs/heads/main`, it updates `refs/heads/main`) or updates `HEAD` directly (if detached) to store the new `commit_oid`.
